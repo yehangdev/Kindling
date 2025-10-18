@@ -6,8 +6,8 @@
 
 ## 功能
 
-- JSONL 过滤和字段选择
-- JSON、JSONL 和 CSV 输出
+- JSON 配置文件
+- CLI 参数覆盖配置
 
 ## 安装
 
