@@ -159,6 +159,77 @@ def group_key(record: Mapping[str, Any], fields: Sequence[str]) -> str:
     labels = [MISSING_VALUE if value is None else str(value) for value in values]
     return " | ".join(labels)
 
+@dataclass
+class GroupedAggregator:
+    """Accumulate field summaries by one or more grouping fields."""
+    group_fields: Sequence[str]
+    metric_fields: Sequence[str]
+    percentiles: Sequence[float] = (50.0, 90.0, 95.0, 99.0)
+    groups: "OrderedDict[str, FieldAggregator]" = field(
+        default_factory=OrderedDict
+    )
+    counts: Counter = field(default_factory=Counter)
+    def add(self, record: Mapping[str, Any]) -> None:
+        key = group_key(record, self.group_fields)
+        self.counts[key] += 1
+        aggregator = self.groups.get(key)
+        if aggregator is None:
+            aggregator = FieldAggregator(self.metric_fields, self.percentiles)
+            self.groups[key] = aggregator
+        aggregator.add(record)
+    def summary(self) -> Dict[str, Dict[str, Any]]:
+        result: Dict[str, Dict[str, Any]] = {}
+        for key, aggregator in self.groups.items():
+            result[key] = {
+                "count": self.counts[key],
+                "metrics": aggregator.summary(),
+            }
+        return result
 
+@dataclass
+class GroupMetadata:
+    first_ordinal: int
+    last_ordinal: int
+    count: int
+    first_timestamp: Optional[datetime] = None
 
+def ordered_group_keys(
+    groups: Mapping[str, Sequence[Any]],
+    metadata: Mapping[str, GroupMetadata],
+    order: str = "first-seen",
+) -> List[str]:
+    """Order request-id groups by first seen, identifier, or size."""
+    keys = list(groups)
+    if order == "first-seen":
+        return sorted(keys, key=lambda key: metadata[key].first_ordinal)
+    if order == "request-id":
+        return sorted(keys, key=lambda key: key.casefold())
+    if order == "count":
+        return sorted(
+            keys,
+            key=lambda key: (
+                -metadata[key].count,
+                metadata[key].first_ordinal,
+                key.casefold(),
+            ),
+        )
+    raise ValueError(f"unknown group order: {order}")
 
+def sort_group(
+    records: Sequence[Tuple[Any, Optional[datetime], int]],
+    order: str = "input",
+) -> List[Any]:
+    """Order records inside a request-id group."""
+    if order == "input":
+        return [item[0] for item in records]
+    if order == "timestamp":
+        ordered = sorted(
+            records,
+            key=lambda item: (
+                item[1] is None,
+                item[1] or datetime.max.replace(tzinfo=None),
+                item[2],
+            ),
+        )
+        return [item[0] for item in ordered]
+    raise ValueError(f"unknown within-group order: {order}")
