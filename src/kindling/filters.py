@@ -219,6 +219,33 @@ def _regex_search(left: Any, right: Any) -> bool:
     except re.error:
         return False
 
+@dataclass(frozen=True)
+class Comparison(Expression):
+    operator: str
+    left: Expression
+    right: Expression
+    def evaluate(self, record: Mapping[str, Any]) -> bool:
+        left = self.left.evaluate(record)
+        right = self.right.evaluate(record)
+        if self.operator in ("==", "="):
+            return _equal(left, right)
+        if self.operator == "!=":
+            return not _equal(left, right)
+        if self.operator in (">", ">=", "<", "<="):
+            return _compare_numbers(left, right, self.operator)
+        if self.operator in ("~", "~=", "=~"):
+            return _regex_search(left, right)
+        if self.operator == "!~":
+            return not _regex_search(left, right)
+        if self.operator == "in":
+            if not isinstance(right, list):
+                return False
+            return any(_equal(left, item) for item in right)
+        if self.operator == "not in":
+            if not isinstance(right, list):
+                return True
+            return not any(_equal(left, item) for item in right)
+        raise ValueError(f"unknown comparison operator: {self.operator}")
 
 class FilterParser:
     """Recursive-descent parser for filters such as ``level == ERROR``."""
