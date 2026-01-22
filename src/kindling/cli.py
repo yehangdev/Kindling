@@ -238,9 +238,128 @@ def _selected_record(
 ) -> Dict[str, Any]:
     return select_fields(record, fields) if fields else dict(record)
 
+def _grouped_counts(
+    records: Iterator[LogRecord],
+    *,
+    count_field: str,
+    group_fields: Sequence[str],
+    limit: Optional[int],
+) -> Dict[str, Dict[str, int]]:
+    grouped: "OrderedDict[str, Counter]" = OrderedDict()
+    matched = 0
+    for log_record in records:
+        if limit is not None and matched >= limit:
+            break
+        matched += 1
+        values = [_field_value(log_record.data, field) for field in group_fields]
+        group = " | ".join(
+            MISSING_VALUE if value is None else str(value) for value in values
+        )
+        value = _field_value(log_record.data, count_field)
+        bucket = grouped.setdefault(group, Counter())
+        bucket[str(MISSING_VALUE if value is None else value)] += 1
+    return {key: dict(value) for key, value in grouped.items()}
 
+def _count_records(
+    records: Iterator[LogRecord],
+    *,
+    count_field: str,
+    group_fields: Sequence[str],
+    limit: Optional[int],
+) -> Any:
+    if group_fields:
+        return _grouped_counts(
+            records,
+            count_field=count_field,
+            group_fields=group_fields,
+            limit=limit,
+        )
+    counts: Counter = Counter()
+    matched = 0
+    for log_record in records:
+        if limit is not None and matched >= limit:
+            break
+        matched += 1
+        value = _field_value(log_record.data, count_field)
+        counts[str(MISSING_VALUE if value is None else value)] += 1
+    return dict(counts)
 
+def _stats_records(
+    records: Iterator[LogRecord],
+    *,
+    fields: Sequence[str],
+    group_fields: Sequence[str],
+    percentiles: Sequence[float],
+    limit: Optional[int],
+) -> Any:
+    if group_fields:
+        aggregator = GroupedAggregator(group_fields, fields, percentiles)
+        matched = 0
+        for log_record in records:
+            if limit is not None and matched >= limit:
+                break
+            matched += 1
+            aggregator.add(log_record.data)
+        return aggregator.summary()
+    field_aggregator = FieldAggregator(fields, percentiles)
+    matched = 0
+    for log_record in records:
+        if limit is not None and matched >= limit:
+            break
+        matched += 1
+        field_aggregator.add(log_record.data)
+    return field_aggregator.summary()
 
+def _request_groups(
+    records: Iterator[LogRecord],
+    *,
+    args: argparse.Namespace,
+    fields: Optional[Sequence[str]],
+    limit: Optional[int],
+) -> Dict[str, List[Dict[str, Any]]]:
+    grouped: "OrderedDict[str, List[Tuple[Dict[str, Any], Any, int]]]" = (
+        OrderedDict()
+    )
+    metadata: Dict[str, GroupMetadata] = {}
+    matched = 0
+    for log_record in records:
+        if limit is not None and matched >= limit:
+            break
+        matched += 1
+        request_id_value = _field_value(
+            log_record.data,
+            args.request_id_field,
+        )
+        request_id = str(
+            MISSING_VALUE if request_id_value is None else request_id_value
+        )
+        output_record = _selected_record(log_record.data, fields)
+        timestamp = record_timestamp(
+            log_record.data,
+            args.time_field,
+            parser=args.timestamp_parser,
+            formats=args.timestamp_format,
+        )
+        grouped.setdefault(request_id, []).append(
+            (output_record, timestamp, log_record.ordinal)
+        )
+        current = metadata.get(request_id)
+        if current is None:
+            metadata[request_id] = GroupMetadata(
+                first_ordinal=log_record.ordinal,
+                last_ordinal=log_record.ordinal,
+                count=1,
+                first_timestamp=timestamp,
+            )
+        else:
+            current.last_ordinal = log_record.ordinal
+            current.count += 1
+            if current.first_timestamp is None and timestamp is not None:
+                current.first_timestamp = timestamp
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    for key in ordered_group_keys(grouped, metadata, args.group_order):
+        result[key] = sort_group(grouped[key], args.within_group_order)
+    return result
 
 def _emit_records(
     records: Iterator[LogRecord],
