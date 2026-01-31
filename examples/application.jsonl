@@ -1,0 +1,12 @@
+{"timestamp":"2025-01-01T10:00:00.010Z","service":"gateway","level":"INFO","request_id":"req-100","method":"GET","path":"/v1/orders","status":200,"latency_ms":18.5,"message":"request completed"}
+{"timestamp":"2025-01-01T10:00:00.090Z","service":"orders","level":"INFO","request_id":"req-100","event":"lookup","order_id":"ord-42","message":"order loaded"}
+{"timestamp":"2025-01-01T10:00:00.145Z","service":"orders","level":"INFO","request_id":"req-100","event":"response","order_id":"ord-42","message":"order response prepared"}
+{"timestamp":"2025-01-01T10:00:01.200Z","service":"gateway","level":"INFO","request_id":"req-101","method":"POST","path":"/v1/orders","status":201,"latency_ms":42.0,"message":"request completed"}
+{"timestamp":"2025-01-01T10:00:01.250Z","service":"orders","level":"INFO","request_id":"req-101","event":"created","order_id":"ord-43","message":"order stored"}
+{"timestamp":"2025-01-01T10:00:02.400Z","service":"gateway","level":"WARN","request_id":"req-102","method":"GET","path":"/v1/catalog","status":404,"latency_ms":12.2,"message":"resource not found"}
+{"timestamp":"2025-01-01T10:00:03.100Z","service":"catalog","level":"ERROR","request_id":"req-103","method":"GET","path":"/v1/catalog","status":503,"latency_ms":810.4,"message":"upstream unavailable"}
+{"timestamp":"2025-01-01T10:00:03.105Z","service":"gateway","level":"ERROR","request_id":"req-103","method":"GET","path":"/v1/catalog","status":503,"latency_ms":815.0,"message":"request failed"}
+{"timestamp":"2025-01-01T10:00:04.050Z","service":"gateway","level":"INFO","request_id":"req-104","method":"GET","path":"/v1/health","status":200,"latency_ms":2.3,"message":"request completed"}
+{"timestamp":"2025-01-01T10:00:05.000Z","service":"worker","level":"INFO","request_id":"job-200","event":"started","queue":"orders","message":"job started"}
+{"timestamp":"2025-01-01T10:00:05.875Z","service":"worker","level":"INFO","request_id":"job-200","event":"finished","queue":"orders","latency_ms":875.0,"message":"job finished"}
+{"timestamp":"2025-01-01T10:00:06.100Z","service":"gateway","level":"INFO","request_id":"req-105","method":"GET","path":"/v1/orders/ord-42","status":200,"latency_ms":22.7,"message":"request completed"}

@@ -1,0 +1,5 @@
+{
+  "format": "jsonl",
+  "service": ["gateway"],
+  "fields": ["timestamp", "level", "request_id", "path", "status", "latency_ms", "message"]
+}
